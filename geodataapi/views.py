@@ -1,4 +1,6 @@
 import json
+import re
+from urllib.parse import unquote_plus
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -7,6 +9,15 @@ from django.conf import settings
 from os.path import join
 from json import load
 
+# normalize name
+def normalize_name(value):
+    decoded_value = unquote_plus(str(value))
+    return re.sub(r"\s+", " ", decoded_value).strip().casefold()
+
+# normalize region name
+def normalize_region_name(value):
+    normalized = normalize_name(value)
+    return re.sub(r"\s+region$", "", normalized).strip()
 
 # entry point
 def index(request):
@@ -70,15 +81,15 @@ def allWards(request):
 
 # fetch districts per region
 @require_http_methods(["GET"])
+@require_http_methods(["GET"])
 def districtsPerRegion(request, region_name):
-    region_name = str(region_name.capitalize()) + " Region"
-    print(region_name)
+    requested_region = normalize_region_name(region_name)
     try:
         with open("geodataapi/Countries/Tanzania/Districts.json", "r") as f:
             data = json.load(f)
         districts = []
         for feature in data['features']:
-            if feature['properties']['region'] == region_name:
+            if normalize_region_name(feature['properties']['region']) == requested_region:
                 districts.append(feature['properties']['District'])
         return JsonResponse({'districts': districts})
     except (FileNotFoundError, json.JSONDecodeError, KeyError) as err:
@@ -88,14 +99,14 @@ def districtsPerRegion(request, region_name):
 # fetch wards per district
 @require_http_methods(["GET"])
 def wardsPerDistrict(request, district_name):
-    district_name = str(district_name)
+    requested_district = normalize_name(district_name)
 
     try:
         with open("geodataapi/Countries/Tanzania/Wards.json", "r",  encoding='utf-8') as f:
             data = json.load(f)
         wards = []
         for feature in data['features']:
-            if feature['properties']['District'].lower().find(district_name.lower()) != -1:
+            if requested_district in normalize_name(feature['properties']['District']):
                 wards.append(feature['properties']['Ward'])
         return JsonResponse({'wards': wards})
     except (FileNotFoundError, json.JSONDecodeError, KeyError) as err:
